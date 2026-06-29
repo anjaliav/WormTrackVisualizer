@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worm Track Visualizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#eef1f7; --panel:#ffffff; --ink:#1b2330; --muted:#6a7589;
+    --accent:#0ea5a4; --accent2:#6366f1; --accent2d:#4f46e5;
+    --border:#e6eaf2; --soft:#f5f7fb;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.06);
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:
+      radial-gradient(900px 500px at 12% -8%, #e7ecfb 0%, rgba(231,236,251,0) 55%),
+      radial-gradient(800px 500px at 100% 0%, #e3f6f5 0%, rgba(227,246,245,0) 50%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  header{padding:26px 24px 6px}
+  .brand{max-width:1180px; margin:0 auto; display:flex; align-items:center; gap:14px}
+  .logo{
+    width:42px; height:42px; border-radius:12px; flex:none;
+    background:linear-gradient(135deg,var(--accent2),var(--accent));
+    box-shadow:0 6px 16px rgba(99,102,241,.35);
+    display:grid; place-items:center;
+  }
+  .brand h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.2px}
+  .brand p{margin:2px 0 0; color:var(--muted); font-size:13px}
+
+  .wrap{max-width:1180px; margin:0 auto; padding:14px 24px 64px}
+
+  #drop{
+    border:2px dashed #c2cce0; border-radius:var(--radius); background:rgba(255,255,255,.7);
+    backdrop-filter:blur(4px); padding:42px; text-align:center; transition:.18s ease; cursor:pointer;
+  }
+  #drop:hover{border-color:var(--accent2); background:#fff}
+  #drop.hover{border-color:var(--accent); background:#e9faf8; transform:translateY(-1px)}
+  #drop .big{
+    width:58px; height:58px; margin:0 auto 4px; border-radius:14px;
+    background:var(--soft); display:grid; place-items:center; font-size:28px;
+  }
+  #drop .t{font-size:15px; font-weight:600; margin-top:10px}
+  #drop .s{font-size:12.5px; color:var(--muted); margin-top:5px}
+  #drop input{display:none}
+
+  .controls{
+    display:flex; flex-wrap:wrap; gap:12px 18px; align-items:center;
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:12px 16px; margin:14px 0; font-size:13px; box-shadow:var(--shadow-sm);
+  }
+  .controls .grp{display:flex; align-items:center; gap:8px}
+  .controls .grp + .grp{position:relative}
+  .controls label{color:var(--muted); font-weight:500}
+  .axis-title{font-weight:700; color:var(--ink); letter-spacing:.02em; text-transform:uppercase; font-size:11px}
+  .controls input[type=range]{
+    width:130px; accent-color:var(--accent2); height:4px; cursor:pointer;
+  }
+  .controls input[type=number]{
+    width:80px; font:inherit; font-size:13px; padding:6px 8px;
+    border:1px solid var(--border); border-radius:8px; background:var(--soft);
+  }
+  .controls input[type=number]:focus{outline:none; border-color:var(--accent2); background:#fff;
+    box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  label.chk{display:flex; align-items:center; gap:7px; cursor:pointer}
+  input[type=checkbox]{accent-color:var(--accent2); width:15px; height:15px; cursor:pointer}
+  select{font:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--border);
+    border-radius:8px; background:var(--soft); color:var(--ink); cursor:pointer}
+  select:focus{outline:none; border-color:var(--accent2); box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .fchip{display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;
+    padding:5px 10px 5px 8px; border-radius:20px; background:var(--soft);
+    border:1px solid var(--border); cursor:pointer; transition:.12s ease; user-select:none}
+  .fchip:hover{border-color:#cdd5e6}
+  .fchip.off{opacity:.4}
+  .fchip .sw{width:12px; height:12px; border-radius:50%}
+  .fchip .ct{color:var(--muted); font-weight:400}
+
+  button{
+    font:inherit; font-size:13px; font-weight:600; border:1px solid var(--border); background:#fff;
+    color:var(--ink); padding:8px 15px; border-radius:9px; cursor:pointer; transition:.12s ease;
+  }
+  button:hover{background:var(--soft); border-color:#d3dae8}
+  button:active{transform:translateY(1px)}
+  button.primary{background:linear-gradient(135deg,var(--accent2),var(--accent2d)); color:#fff; border-color:transparent;
+    box-shadow:0 4px 12px rgba(99,102,241,.3)}
+  button.primary:hover{filter:brightness(1.06); background:linear-gradient(135deg,var(--accent2),var(--accent2d))}
+  button:disabled{opacity:.45; cursor:not-allowed}
+
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; margin:4px 0 0; padding:5px;
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow-sm); width:fit-content}
+  .tabs button{border:none; background:transparent; color:var(--muted); padding:8px 16px; border-radius:8px}
+  .tabs button:hover{background:var(--soft); color:var(--ink)}
+  .tabs button.active{background:linear-gradient(135deg,var(--accent2),var(--accent2d)); color:#fff;
+    box-shadow:0 3px 10px rgba(99,102,241,.3)}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px 18px 16px; min-height:200px; margin-top:12px; box-shadow:var(--shadow);
+  }
+  .canvas-stage{
+    background:
+      linear-gradient(var(--soft),var(--soft));
+    border:1px solid var(--border); border-radius:12px; padding:10px;
+  }
+  canvas{max-width:100%; display:block; margin:0 auto; cursor:crosshair; border-radius:8px}
+  .meta{font-size:12.5px; color:var(--muted); margin:2px 2px 12px; line-height:1.5}
+  .legend{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
+  .legend .it{display:flex; align-items:center; gap:7px; cursor:pointer; user-select:none;
+    font-size:12px; font-weight:500; padding:4px 10px; border-radius:20px;
+    background:var(--soft); border:1px solid var(--border); transition:.12s ease}
+  .legend .it:hover{border-color:#cdd5e6}
+  .legend .it.off{opacity:.4; background:transparent}
+  .legend .sw{width:16px; height:4px; border-radius:3px}
+  .hidden{display:none}
+  .stat{display:inline-flex; align-items:baseline; gap:5px; margin-right:6px;
+    padding:5px 12px; background:var(--soft); border:1px solid var(--border);
+    border-radius:20px; font-size:12px; color:var(--muted)}
+  .stat b{color:var(--ink); font-size:14px; font-weight:700}
+  .sep{width:1px; height:22px; background:var(--border); margin:0 2px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 17c2.5 0 2.5-9 5-9s2.5 9 5 9 2.5-10 5-10"/>
+        <circle cx="3" cy="17" r="1.4" fill="#fff" stroke="none"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Worm Track Visualizer</h1>
+      <p>Plot &amp; compare raw &amp; normalized XY trajectories from one or more worm-tracks CSVs.</p>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="drop">
+    <div class="big">📄</div>
+    <div class="t">Drop CSV files here, or click to browse</div>
+    <div class="s">Upload one or many. Expected columns: WormID, Frame, PositionX, PositionY</div>
+    <input type="file" id="file" accept=".csv,text/csv" multiple>
+  </div>
+
+  <div id="filebar" class="controls hidden">
+    <div class="grp"><span class="axis-title">Files</span></div>
+    <div class="sep"></div>
+    <div class="grp" id="fileChips" style="flex-wrap:wrap; gap:8px"></div>
+    <div class="grp" style="margin-left:auto"><button id="clearFiles">Clear all</button></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="controls">
+      <div class="grp" id="stats"></div>
+      <div class="sep"></div>
+      <div class="grp" id="colorByGrp">
+        <label for="colorBy">Color by</label>
+        <select id="colorBy">
+          <option value="file">File</option>
+          <option value="worm">Worm</option>
+        </select>
+      </div>
+      <div class="grp">
+        <label for="line">Line width</label>
+        <input type="range" id="line" min="0.4" max="4" step="0.2" value="1">
+      </div>
+      <div class="grp">
+        <label class="chk"><input type="checkbox" id="markers" checked> Start/end markers</label>
+      </div>
+      <div class="grp">
+        <label class="chk"><input type="checkbox" id="equal" checked> Equal aspect</label>
+      </div>
+      <div class="grp">
+        <label class="chk" title="Remove (0,0) off-plate frames and single-frame teleport spikes from the tracker">
+          <input type="checkbox" id="clean" checked> Remove dropouts</label>
+        <input type="number" id="cleanThr" value="200" min="10" step="10" title="Spike jump threshold (px)" style="width:64px">
+      </div>
+    </div>
+
+    <div class="controls" id="axisBar">
+      <div class="grp"><span class="axis-title">Axis limits</span></div>
+      <div class="sep"></div>
+      <div class="grp"><label>X min</label><input type="number" id="axXmin" step="any"></div>
+      <div class="grp"><label>X max</label><input type="number" id="axXmax" step="any"></div>
+      <div class="grp"><label>Y min</label><input type="number" id="axYmin" step="any"></div>
+      <div class="grp"><label>Y max</label><input type="number" id="axYmax" step="any"></div>
+      <div class="grp"><button id="axApply">Apply</button><button id="axAuto">Auto</button></div>
+      <div class="grp" style="margin-left:auto"><span style="color:var(--muted);font-size:11px">Y min sits at the top (image coords)</span></div>
+    </div>
+
+    <div class="controls" id="exportBar">
+      <div class="grp"><span class="axis-title">Export</span></div>
+      <div class="sep"></div>
+      <div class="grp"><label>This view</label>
+        <button id="dlPng">PNG</button>
+        <button id="dlSvg">SVG</button>
+      </div>
+      <div class="sep"></div>
+      <div class="grp"><label>All graphs</label>
+        <button id="dlAllSvg">SVG (zip)</button>
+        <button id="dlCsv">Normalized CSV</button>
+        <button id="dlZip">Everything (zip)</button>
+      </div>
+      <div class="grp" style="margin-left:auto">
+        <button class="primary" id="dlPdf">📄 PDF report</button>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button data-view="rawOverlay" class="active">Raw overlay</button>
+      <button data-view="rawGrid">Raw grid</button>
+      <button data-view="normOverlay">Normalized overlay</button>
+      <button data-view="normGrid">Normalized grid</button>
+    </div>
+    <div class="panel">
+      <div class="meta" id="caption"></div>
+      <div class="canvas-stage">
+        <canvas id="cv" width="900" height="900"></canvas>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- tab10 palette (matches matplotlib) ----
+const TAB10 = ["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd",
+               "#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"];
+
+// distinct colors used to tint whole files when comparing
+const FILE_PAL = ["#6366f1","#0ea5a4","#f59e0b","#ef4444","#8b5cf6","#ec4899",
+                  "#0891b2","#84cc16","#f97316","#3b82f6","#db2777","#16a34a"];
+
+let FILES = [];            // datasets: [{base, idx, worms, bounds, totalPts, fcolor}]
+let DATA = null;           // compiled view across all files
+let HIDDEN = new Set();    // worm keys "idx:id" toggled off
+let HIDDEN_FILES = new Set(); // file idx toggled off
+let VIEW = "rawOverlay";
+let AXES = {raw:null, norm:null};  // manual axis overrides per mode (null = auto)
+let AUTO_DOM = null;
+let FILE_SEQ = 0;          // monotonic id for files
+
+const $ = s => document.querySelector(s);
+const drop = $("#drop"), fileInput = $("#file");
+
+// ---------- file handling ----------
+drop.addEventListener("click", ()=>fileInput.click());
+fileInput.addEventListener("change", e=>{ loadFiles(e.target.files); fileInput.value=""; });
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hover");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("hover");}));
+drop.addEventListener("drop", e=>{ loadFiles(e.dataTransfer.files); });
+
+function parseFile(file){
+  return new Promise((resolve,reject)=>{
+    Papa.parse(file, {
+      header:true, dynamicTyping:true, skipEmptyLines:true,
+      complete: res => {
+        try{ resolve(buildFile(res.data, file.name.replace(/\.csv$/i,""), FILE_SEQ++)); }
+        catch(err){ reject(err); }
+      },
+      error: err => reject(err)
+    });
+  });
+}
+
+async function loadFiles(list){
+  const files = [...list].filter(f=>f.name.toLowerCase().endsWith(".csv"));
+  if(!files.length){ alert("Please provide one or more .csv files."); return; }
+  const errors=[];
+  for(const f of files){
+    try{ FILES.push(await parseFile(f)); }
+    catch(err){ errors.push(`${f.name}: ${err.message}`); }
+  }
+  if(errors.length) alert("Some files were skipped:\n\n"+errors.join("\n"));
+  if(FILES.length){ compile(); render(); }
+}
+
+$("#clearFiles").addEventListener("click", ()=>{
+  FILES=[]; DATA=null; HIDDEN.clear(); HIDDEN_FILES.clear(); AXES={raw:null,norm:null};
+  $("#app").classList.add("hidden"); $("#filebar").classList.add("hidden");
+  $("#drop").querySelector(".t").textContent = "Drop CSV files here, or click to browse";
+});
+
+// ---------- transform one file ----------
+function buildFile(rows, base, idx){
+  const need = ["WormID","Frame","PositionX","PositionY"];
+  const cols = Object.keys(rows[0]||{});
+  const missing = need.filter(c=>!cols.includes(c));
+  if(missing.length) throw new Error("missing columns "+missing.join(", "));
+
+  const groups = new Map();
+  for(const r of rows){
+    if(r.WormID==null || r.PositionX==null || r.PositionY==null) continue;
+    if(!groups.has(r.WormID)) groups.set(r.WormID, []);
+    groups.get(r.WormID).push(r);
+  }
+  if(!groups.size) throw new Error("no valid rows");
+  const ids = [...groups.keys()].sort((a,b)=>a-b);
+  const fcolor = FILE_PAL[idx % FILE_PAL.length];
+  const worms = ids.map((id,i)=>{
+    const pts = groups.get(id).sort((a,b)=>a.Frame-b.Frame);
+    return {id, key:idx+":"+id, fileIdx:idx, file:base, wcolor:TAB10[i%10], fcolor,
+            // raw, unfiltered point arrays (kept so cleaning can be toggled live)
+            rx: pts.map(p=>p.PositionX), ry: pts.map(p=>p.PositionY), rframe: pts.map(p=>p.Frame)};
+  });
+  const f = {base, idx, fcolor, worms};
+  cleanFile(f);
+  return f;
+}
+
+// ---------- dropout / spike cleaning ----------
+// CLEAN.on: drop (0,0) sentinel frames + single-frame teleport spikes
+let CLEAN = {on:true, thr:200};
+function cleanWorm(w){
+  const X=w.rx, Y=w.ry, F=w.rframe;
+  let keep=[...X.keys()];
+  if(CLEAN.on){
+    keep = keep.filter(i=>!(X[i]===0 && Y[i]===0));           // off-plate sentinels
+    const thr=CLEAN.thr, k2=[];
+    for(let p=0;p<keep.length;p++){
+      const i=keep[p], a=keep[p-1], b=keep[p+1];
+      if(a!=null && b!=null){
+        const din =Math.hypot(X[i]-X[a],Y[i]-Y[a]);
+        const dout=Math.hypot(X[b]-X[i],Y[b]-Y[i]);
+        const dret=Math.hypot(X[b]-X[a],Y[b]-Y[a]);
+        if(din>thr && dout>thr && dret<Math.max(din,dout)*0.6) continue; // teleport spike
+      }
+      k2.push(i);
+    }
+    keep=k2;
+  }
+  if(!keep.length) keep=[0];                                   // never empty
+  w.x=keep.map(i=>X[i]); w.y=keep.map(i=>Y[i]); w.frame=keep.map(i=>F[i]);
+  const x0=w.x[0], y0=w.y[0];
+  w.nx=w.x.map(v=>v-x0); w.ny=w.y.map(v=>v-y0);
+  w.removed = X.length - w.x.length;
+}
+function cleanFile(f){
+  let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity,total=0,removed=0;
+  f.worms.forEach(w=>{
+    cleanWorm(w); total+=w.x.length; removed+=w.removed;
+    for(const v of w.x){ if(v<xmin)xmin=v; if(v>xmax)xmax=v; }
+    for(const v of w.y){ if(v<ymin)ymin=v; if(v>ymax)ymax=v; }
+  });
+  f.totalPts=total; f.removed=removed; f.bounds={xmin,xmax,ymin,ymax};
+}
+function recleanAll(){ FILES.forEach(cleanFile); compile(); render(); }
+
+// ---------- compile all files into one view ----------
+function compile(){
+  const worms=[]; let total=0, removed=0;
+  let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
+  FILES.forEach(f=>{
+    f.worms.forEach(w=>worms.push(w)); total+=f.totalPts; removed+=f.removed||0;
+    xmin=Math.min(xmin,f.bounds.xmin); xmax=Math.max(xmax,f.bounds.xmax);
+    ymin=Math.min(ymin,f.bounds.ymin); ymax=Math.max(ymax,f.bounds.ymax);
+  });
+  DATA={ worms, totalPts:total, removed, bounds:{xmin,xmax,ymin,ymax},
+         base: FILES.length===1 ? FILES[0].base : "compiled" };
+}
+
+// color a worm depending on the "Color by" mode (always by-worm if a single file)
+function dispColor(w){
+  if(FILES.length>1 && $("#colorBy") && $("#colorBy").value==="file") return w.fcolor;
+  return w.wcolor;
+}
+function visibleFiles(){ return FILES.filter(f=>!HIDDEN_FILES.has(f.idx)); }
+
+// ---------- rendering ----------
+const cv = $("#cv"), ctx = cv.getContext("2d");
+let LW=900, LH=900; // logical (CSS) canvas size
+
+// size canvas at device-pixel resolution for crisp output
+function sizeCanvas(w,h){
+  const dpr = window.devicePixelRatio || 1;
+  LW=w; LH=h;
+  cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  cv.style.width = w+"px"; cv.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0); // draw in logical coords
+}
+
+// ===== minimal SVG context (subset of the Canvas 2D API used below) =====
+const _n = v => Math.round(v*100)/100;
+const _esc = t => String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function _mul(a,b){ return [
+  a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1],
+  a[0]*b[2]+a[2]*b[3], a[1]*b[2]+a[3]*b[3],
+  a[0]*b[4]+a[2]*b[5]+a[4], a[1]*b[4]+a[3]*b[5]+a[5] ]; }
+class SvgCtx{
+  constructor(w,h){ this.W=w; this.H=h; this.body=[];
+    this.fillStyle="#000"; this.strokeStyle="#000"; this.lineWidth=1;
+    this.font="12px sans-serif"; this.textAlign="left"; this.textBaseline="alphabetic";
+    this.m=[1,0,0,1,0,0]; this._stack=[]; this._d=[]; }
+  save(){ this._stack.push([this.m.slice(),this.fillStyle,this.strokeStyle,this.lineWidth,this.font,this.textAlign,this.textBaseline]); }
+  restore(){ const s=this._stack.pop(); if(!s)return;
+    [this.m,this.fillStyle,this.strokeStyle,this.lineWidth,this.font,this.textAlign,this.textBaseline]=s; this.m=this.m.slice(); }
+  translate(x,y){ this.m=_mul(this.m,[1,0,0,1,x,y]); }
+  rotate(a){ const c=Math.cos(a),s=Math.sin(a); this.m=_mul(this.m,[c,s,-s,c,0,0]); }
+  _t(){ return ` transform="matrix(${this.m.map(_n).join(' ')})"`; }
+  beginPath(){ this._d=[]; }
+  moveTo(x,y){ this._d.push(`M${_n(x)} ${_n(y)}`); }
+  lineTo(x,y){ this._d.push(`L${_n(x)} ${_n(y)}`); }
+  closePath(){ this._d.push("Z"); }
+  arc(x,y,r){ // treated as full circle (only use case)
+    this._d.push(`M${_n(x-r)} ${_n(y)}a${_n(r)} ${_n(r)} 0 1 0 ${_n(2*r)} 0a${_n(r)} ${_n(r)} 0 1 0 ${_n(-2*r)} 0`); }
+  stroke(){ if(this._d.length) this.body.push(
+    `<path d="${this._d.join(' ')}" fill="none" stroke="${this.strokeStyle}" stroke-width="${_n(this.lineWidth)}" stroke-linecap="round" stroke-linejoin="round"${this._t()}/>`); }
+  fill(){ if(this._d.length) this.body.push(
+    `<path d="${this._d.join(' ')}" fill="${this.fillStyle}" stroke="none"${this._t()}/>`); }
+  strokeRect(x,y,w,h){ this.body.push(
+    `<rect x="${_n(x)}" y="${_n(y)}" width="${_n(w)}" height="${_n(h)}" fill="none" stroke="${this.strokeStyle}" stroke-width="${_n(this.lineWidth)}"${this._t()}/>`); }
+  fillRect(x,y,w,h){ this.body.push(
+    `<rect x="${_n(x)}" y="${_n(y)}" width="${_n(w)}" height="${_n(h)}" fill="${this.fillStyle}"${this._t()}/>`); }
+  fillText(t,x,y){
+    const anchor={left:"start",start:"start",center:"middle",right:"end",end:"end"}[this.textAlign]||"start";
+    const base={top:"text-before-edge",hanging:"hanging",middle:"central",alphabetic:"alphabetic",bottom:"text-after-edge"}[this.textBaseline]||"alphabetic";
+    let fs=12; const mm=String(this.font).match(/(\d+(?:\.\d+)?)px/); if(mm)fs=+mm[1];
+    const fw=/(?:^|\s)(?:[5-9]00|bold)/.test(this.font)?"600":"400";
+    this.body.push(`<text x="${_n(x)}" y="${_n(y)}" font-family="Inter, sans-serif" font-size="${fs}" font-weight="${fw}" fill="${this.fillStyle}" text-anchor="${anchor}" dominant-baseline="${base}"${this._t()}>${_esc(t)}</text>`); }
+  getSvg(){ return `<?xml version="1.0" encoding="UTF-8"?>\n`+
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${this.W}" height="${this.H}" viewBox="0 0 ${this.W} ${this.H}">\n`+
+    this.body.join("\n")+`\n</svg>`; }
+}
+
+// "nice" tick values across [lo,hi]
+function ticks(lo,hi,target=5){
+  const span=hi-lo; if(!(span>0)) return [lo];
+  const raw=span/target, mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const norm=raw/mag, step=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
+  const start=Math.ceil(lo/step)*step, out=[];
+  for(let v=start; v<=hi+step*1e-6; v+=step) out.push(Math.abs(v)<step*1e-6?0:v);
+  return out;
+}
+function fmt(v){ const a=Math.abs(v);
+  return a>=1000? Math.round(v).toString() : a>=1? (Math.round(v*10)/10).toString() : v.toFixed(2); }
+
+function drawTicks(g,box,dom,m,small){
+  const {x0,y0,w,h}=box;
+  const fs = small?9:11, n = small?4:6;
+  g.fillStyle="#64748b"; g.font=fs+"px sans-serif";
+  g.strokeStyle="#cbd5e1"; g.lineWidth=1;
+  g.textAlign="center"; g.textBaseline="top";
+  for(const t of ticks(dom.xmin,dom.xmax,n)){
+    const [px]=m(t,dom.ymin);
+    if(px<x0-1||px>x0+w+1) continue;
+    g.beginPath();g.moveTo(px,y0+h);g.lineTo(px,y0+h+4);g.stroke();
+    g.fillText(fmt(t),px,y0+h+6);
+  }
+  g.textAlign="right"; g.textBaseline="middle";
+  for(const t of ticks(dom.ymin,dom.ymax,n)){
+    const [,py]=m(dom.xmin,t);
+    if(py<y0-1||py>y0+h+1) continue;
+    g.beginPath();g.moveTo(x0-4,py);g.lineTo(x0,py);g.stroke();
+    g.fillText(fmt(t),x0-6,py);
+  }
+}
+
+function render(){
+  $("#app").classList.remove("hidden");
+  $("#filebar").classList.remove("hidden");
+  const multi = FILES.length>1;
+  $("#colorByGrp").style.display = multi ? "" : "none";
+  $("#drop").querySelector(".t").textContent =
+    `${FILES.length} file${multi?"s":""} loaded — drop more to add`;
+  $("#stats").innerHTML =
+    (multi?`<span class="stat"><b>${FILES.length}</b> files</span>`:``)+
+    `<span class="stat"><b>${DATA.worms.length}</b> worms</span>`+
+    `<span class="stat"><b>${DATA.totalPts.toLocaleString()}</b> points</span>`+
+    (DATA.removed?`<span class="stat" style="color:#b45309" title="dropout/spike frames removed"><b style="color:#b45309">${DATA.removed.toLocaleString()}</b> cleaned</span>`:``);
+  buildFileChips();
+  buildLegend();
+  draw();
+}
+
+function buildFileChips(){
+  const el=$("#fileChips"); el.innerHTML="";
+  FILES.forEach(f=>{
+    const off=HIDDEN_FILES.has(f.idx);
+    const chip=document.createElement("div");
+    chip.className="fchip"+(off?" off":"");
+    chip.innerHTML=`<span class="sw" style="background:${f.fcolor}"></span>`+
+      `<span>${f.base}</span><span class="ct">${f.worms.length}w · ${f.totalPts.toLocaleString()}pt</span>`+
+      `<span class="rm" style="font-weight:700;color:var(--muted);padding-left:2px">×</span>`;
+    chip.onclick=(e)=>{
+      if(e.target.classList.contains("rm")){ removeFile(f.idx); return; }
+      off?HIDDEN_FILES.delete(f.idx):HIDDEN_FILES.add(f.idx);
+      buildFileChips(); buildLegend(); draw();
+    };
+    el.appendChild(chip);
+  });
+}
+function removeFile(idx){
+  FILES=FILES.filter(f=>f.idx!==idx); HIDDEN_FILES.delete(idx);
+  if(!FILES.length){ $("#clearFiles").click(); return; }
+  compile(); render();
+}
+
+function legChip(color,label,off,onclick){
+  const it=document.createElement("div"); it.className="it"+(off?" off":"");
+  it.innerHTML=`<span class="sw" style="background:${color}"></span>${label}`;
+  it.onclick=onclick; return it;
+}
+function buildLegend(){
+  const el=$("#legend"); el.innerHTML="";
+  const multi=FILES.length>1, byFile=multi && $("#colorBy").value==="file";
+  if(byFile){
+    FILES.forEach(f=> el.appendChild(legChip(f.fcolor, f.base, HIDDEN_FILES.has(f.idx),
+      ()=>{ HIDDEN_FILES.has(f.idx)?HIDDEN_FILES.delete(f.idx):HIDDEN_FILES.add(f.idx);
+            buildFileChips(); buildLegend(); draw(); })));
+  } else {
+    DATA.worms.forEach(w=> el.appendChild(legChip(dispColor(w),
+      (multi?w.file+" · ":"")+"Worm "+w.id,
+      HIDDEN.has(w.key)||HIDDEN_FILES.has(w.fileIdx),
+      ()=>{ HIDDEN.has(w.key)?HIDDEN.delete(w.key):HIDDEN.add(w.key); buildLegend(); draw(); })));
+  }
+}
+
+function activeWorms(){
+  return DATA.worms.filter(w=>!HIDDEN_FILES.has(w.fileIdx) && !HIDDEN.has(w.key));
+}
+// distinct-file unit count for grid layout, derived from a worm list
+function unitCount(view, worms){
+  if(!view.endsWith("Grid")) return 1;
+  if(FILES.length>1) return new Set(worms.map(w=>w.fileIdx)).size;
+  return worms.length;
+}
+
+// map data->pixel for one axes box (image coords: smallest Y at top)
+function makeMapper(box, dom){
+  const {x0,y0,w,h} = box;
+  const {xmin,xmax,ymin,ymax} = dom;
+  let sx = w/(xmax-xmin||1), sy = h/(ymax-ymin||1);
+  if($("#equal").checked){ const s=Math.min(sx,sy); sx=s; sy=s; }
+  const usedW = sx*(xmax-xmin), usedH = sy*(ymax-ymin);
+  const ox = x0 + (w-usedW)/2, oy = y0 + (h-usedH)/2;
+  return (X,Y)=>[ ox + (X-xmin)*sx, oy + (Y-ymin)*sy ];
+}
+
+function drawAxesBox(g,box,dom,title){
+  const {x0,y0,w,h}=box;
+  g.save();
+  g.strokeStyle="#c9d3e0"; g.lineWidth=1;
+  g.strokeRect(x0,y0,w,h);
+  const m = makeMapper(box,dom);
+  g.strokeStyle="#e2e8f2"; g.lineWidth=1;
+  if(dom.xmin<=0 && dom.xmax>=0){ const[px]=m(0,dom.ymin); g.beginPath();g.moveTo(px,y0);g.lineTo(px,y0+h);g.stroke(); }
+  if(dom.ymin<=0 && dom.ymax>=0){ const[,py]=m(dom.xmin,0); g.beginPath();g.moveTo(x0,py);g.lineTo(x0+w,py);g.stroke(); }
+  if(title){ g.fillStyle="#334155"; g.font="600 13px sans-serif"; g.textAlign="center"; g.textBaseline="alphabetic";
+    g.fillText(title, x0+w/2, y0-7); }
+  g.restore();
+  return m;
+}
+
+function plotWorm(g, m, w, useNorm, lw, markers, color){
+  const xs = useNorm? w.nx : w.x, ys = useNorm? w.ny : w.y;
+  g.beginPath();
+  for(let i=0;i<xs.length;i++){ const[px,py]=m(xs[i],ys[i]); i?g.lineTo(px,py):g.moveTo(px,py); }
+  g.strokeStyle=color||dispColor(w); g.lineWidth=lw; g.stroke();
+  if(markers && xs.length){
+    const[sx,sy]=m(xs[0],ys[0]); const[ex,ey]=m(xs[xs.length-1],ys[ys.length-1]);
+    dot(g,sx,sy,"#16a34a"); dot(g,ex,ey,"#dc2626");
+  }
+}
+function dot(g,x,y,c){ g.beginPath();g.arc(x,y,3.2,0,7);g.fillStyle=c;g.fill();
+  g.lineWidth=.8;g.strokeStyle="#fff";g.stroke(); }
+
+// view geometry
+function viewLayout(view, n){
+  if(view.endsWith("Grid")){ const cols=3, rows=Math.max(1,Math.ceil(n/cols)), cell=300;
+    return {W:cols*cell+20, H:rows*cell+16, cols, rows, cell}; }
+  return {W:900, H:900};
+}
+// auto + manual-override domain for a view
+function computeDom(view){
+  const norm=view.startsWith("norm"), mode=norm?"norm":"raw";
+  let dom;
+  if(norm){ dom={xmin:-1000,xmax:1000,ymin:-1000,ymax:1000}; }
+  else{ const b=DATA.bounds, px=(b.xmax-b.xmin)*0.03||1, py=(b.ymax-b.ymin)*0.03||1;
+    dom={xmin:b.xmin-px,xmax:b.xmax+px,ymin:b.ymin-py,ymax:b.ymax+py}; }
+  const auto={...dom};
+  const ov=AXES[mode];
+  if(ov){ for(const k of ["xmin","xmax","ymin","ymax"]) if(ov[k]!=null && !isNaN(ov[k])) dom[k]=ov[k]; }
+  return {dom, auto, norm, mode};
+}
+// per-worm autoscaled domain (used in PDF per-worm panels)
+function wormDomain(w, useNorm){
+  const xs=useNorm?w.nx:w.x, ys=useNorm?w.ny:w.y;
+  let xmn=Infinity,xmx=-Infinity,ymn=Infinity,ymx=-Infinity;
+  for(const v of xs){ if(v<xmn)xmn=v; if(v>xmx)xmx=v; }
+  for(const v of ys){ if(v<ymn)ymn=v; if(v>ymx)ymx=v; }
+  const pad=Math.max((xmx-xmn)*0.08,(ymx-ymn)*0.08,1);
+  return {xmin:xmn-pad,xmax:xmx+pad,ymin:ymn-pad,ymax:ymx+pad};
+}
+
+// draw a full view (overlay or grid) onto any context g, in logical W×H coords
+function drawScene(g, view, dom, W, H, opts, worms){
+  worms = worms || activeWorms();
+  const norm=view.startsWith("norm"), grid=view.endsWith("Grid"), multi=FILES.length>1;
+  g.save(); g.fillStyle="#fff"; g.fillRect(0,0,W,H); g.restore();
+  const gridBox=(i,cell)=>{ const r=Math.floor(i/3), c=i%3;
+    return {x0:10+c*cell+46, y0:14+r*cell+20, w:cell-62, h:cell-52}; };
+  if(grid && multi){
+    // one panel per file (worms within a file colored individually)
+    const byFile=new Map();
+    worms.forEach(w=>{ if(!byFile.has(w.fileIdx)) byFile.set(w.fileIdx,[]); byFile.get(w.fileIdx).push(w); });
+    const fxs=[...byFile.keys()];
+    const {cell}=viewLayout(view, fxs.length);
+    fxs.forEach((fx,i)=>{
+      const f=FILES.find(ff=>ff.idx===fx);
+      const box=gridBox(i,cell);
+      const m=drawAxesBox(g,box,dom, f?f.base:("File "+fx));
+      drawTicks(g,box,dom,m,true);
+      byFile.get(fx).forEach(w=>plotWorm(g,m,w,norm,opts.lw,opts.markers,w.wcolor));
+    });
+  } else if(grid){
+    const {cell}=viewLayout(view, worms.length);
+    worms.forEach((w,i)=>{
+      const box=gridBox(i,cell);
+      const m=drawAxesBox(g,box,dom,"Worm "+w.id);
+      drawTicks(g,box,dom,m,true);
+      plotWorm(g,m,w,norm,opts.lw,opts.markers,w.wcolor);
+    });
+  } else {
+    const box={x0:74,y0:34,w:W-104,h:H-92};
+    const m=drawAxesBox(g,box,dom,null);
+    drawTicks(g,box,dom,m,false);
+    worms.forEach(w=>plotWorm(g,m,w,norm,opts.lw,opts.markers));
+    g.fillStyle="#475569"; g.font="600 12px sans-serif";
+    g.textAlign="center"; g.textBaseline="alphabetic";
+    g.fillText(norm?"ΔX from start (px)":"Position X (px)", box.x0+box.w/2, H-8);
+    g.save(); g.translate(18,box.y0+box.h/2); g.rotate(-Math.PI/2);
+    g.fillText(norm?"ΔY from start (px)":"Position Y (px)",0,0); g.restore();
+  }
+}
+
+function draw(){
+  const opts={lw:parseFloat($("#line").value), markers:$("#markers").checked};
+  const {dom}=computeDom(VIEW);
+  syncAxisFields(dom);
+  const ws=activeWorms();
+  const {W,H}=viewLayout(VIEW, unitCount(VIEW, ws));
+  sizeCanvas(W,H);
+  drawScene(ctx, VIEW, dom, W, H, opts, ws);
+
+  const caps={
+    rawOverlay:"Raw XY trajectories — all worms overlaid (image Y-axis, origin top-left).",
+    rawGrid:"Per-worm raw XY trajectories on standardized axes. Green = start, red = end.",
+    normOverlay:"Normalized trajectories — each worm's start moved to (0,0). Axes fixed ±1000 px.",
+    normGrid:"Per-worm normalized trajectories (origin at start). Axes fixed ±1000 px."
+  };
+  let cap=caps[VIEW];
+  if(FILES.length>1){
+    if(VIEW.endsWith("Grid"))
+      cap=(VIEW.startsWith("norm")?"Normalized":"Raw")+" trajectories — one panel per file; worms colored individually within each file.";
+    else cap+=`  Compiled across ${FILES.length} files, colored by ${$("#colorBy").value}.`;
+  }
+  $("#caption").textContent = cap;
+}
+
+// ---------- controls ----------
+$("#tabs").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-view]"); if(!b) return;
+  VIEW=b.dataset.view;
+  [...$("#tabs").children].forEach(x=>x.classList.toggle("active",x===b));
+  draw();
+});
+["#line","#markers","#equal"].forEach(s=>$(s).addEventListener("input",draw));
+$("#colorBy").addEventListener("change", ()=>{ buildLegend(); draw(); });
+// dropout cleaning controls -> re-clean from raw, recompute bounds, redraw
+$("#clean").addEventListener("change", ()=>{ CLEAN.on=$("#clean").checked; if(FILES.length) recleanAll(); });
+$("#cleanThr").addEventListener("change", ()=>{
+  const v=parseFloat($("#cleanThr").value); if(!isNaN(v)&&v>0) CLEAN.thr=v;
+  if(CLEAN.on && FILES.length) recleanAll();
+});
+
+// ---- axis limit controls ----
+function curMode(){ return VIEW.startsWith("norm") ? "norm" : "raw"; }
+function syncAxisFields(dom){
+  // don't clobber a field the user is currently editing
+  const map={axXmin:dom.xmin,axXmax:dom.xmax,axYmin:dom.ymin,axYmax:dom.ymax};
+  for(const id in map){
+    const el=document.getElementById(id);
+    if(document.activeElement!==el){
+      const v=map[id]; el.value = (Math.round(v*1000)/1000);
+    }
+  }
+}
+function applyAxes(){
+  const g=id=>{ const v=parseFloat(document.getElementById(id).value); return isNaN(v)?null:v; };
+  let xmin=g("axXmin"),xmax=g("axXmax"),ymin=g("axYmin"),ymax=g("axYmax");
+  if(xmin!=null&&xmax!=null&&xmin>=xmax){ alert("X min must be less than X max."); return; }
+  if(ymin!=null&&ymax!=null&&ymin>=ymax){ alert("Y min must be less than Y max."); return; }
+  AXES[curMode()]={xmin,xmax,ymin,ymax};
+  draw();
+}
+$("#axApply").addEventListener("click", applyAxes);
+$("#axAuto").addEventListener("click", ()=>{ AXES[curMode()]=null; draw(); });
+["axXmin","axXmax","axYmin","axYmax"].forEach(id=>{
+  document.getElementById(id).addEventListener("keydown", e=>{ if(e.key==="Enter") applyAxes(); });
+});
+
+// ================= EXPORT =================
+const VIEW_FILES=[["rawOverlay","raw_overlay"],["rawGrid","raw_grid"],
+                  ["normOverlay","normalized_overlay"],["normGrid","normalized_grid"]];
+const opts = ()=>({lw:parseFloat($("#line").value), markers:$("#markers").checked});
+
+function downloadBlob(blob,name){
+  const a=document.createElement("a"); a.download=name;
+  a.href=URL.createObjectURL(blob); document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},2000);
+}
+function downloadText(text,name,type){ downloadBlob(new Blob([text],{type:type||"text/plain;charset=utf-8"}),name); }
+
+// ---- SVG ----
+function viewSVG(view, worms){
+  worms = worms || activeWorms();
+  const {W,H}=viewLayout(view, unitCount(view, worms));
+  const g=new SvgCtx(W,H);
+  drawScene(g, view, computeDom(view).dom, W, H, opts(), worms);
+  return g.getSvg();
+}
+// ---- high-res PNG (returns {png,w,h}) ----
+function viewPNG(view, scale, worms){
+  scale=scale||3; worms = worms || activeWorms();
+  const {W,H}=viewLayout(view, unitCount(view, worms));
+  const c=document.createElement("canvas"); c.width=W*scale; c.height=H*scale;
+  const g=c.getContext("2d"); g.scale(scale,scale);
+  drawScene(g, view, computeDom(view).dom, W, H, opts(), worms);
+  return {png:c.toDataURL("image/png"), w:W, h:H};
+}
+// ---- per-worm panel image (raw + normalized side by side) ----
+function wormPNG(w, scale){
+  scale=scale||2; const W=940,H=470;
+  const c=document.createElement("canvas"); c.width=W*scale; c.height=H*scale;
+  const g=c.getContext("2d"); g.scale(scale,scale);
+  g.fillStyle="#fff"; g.fillRect(0,0,W,H);
+  const boxR={x0:64,y0:54,w:360,h:360}, boxN={x0:528,y0:54,w:360,h:360};
+  let m=drawAxesBox(g,boxR,wormDomain(w,false),"Raw track");
+  drawTicks(g,boxR,wormDomain(w,false),m,true); plotWorm(g,m,w,false,1.4,true,w.wcolor);
+  m=drawAxesBox(g,boxN,wormDomain(w,true),"Normalized (origin at start)");
+  drawTicks(g,boxN,wormDomain(w,true),m,true); plotWorm(g,m,w,true,1.4,true,w.wcolor);
+  g.fillStyle="#475569"; g.font="11px sans-serif"; g.textAlign="center"; g.textBaseline="alphabetic";
+  g.fillText("Position X (px)", boxR.x0+boxR.w/2, H-26);
+  g.fillText("ΔX from start (px)", boxN.x0+boxN.w/2, H-26);
+  return {png:c.toDataURL("image/png"), w:W, h:H};
+}
+
+// ---- CSV (SourceFile column compiles all uploaded files together) ----
+const _csvName = s => `"${String(s).replace(/"/g,'""')}"`;
+function normalizedCSV(){
+  let out="SourceFile,WormID,Frame,PositionX,PositionY,nx,ny\n";
+  DATA.worms.forEach(w=>{ for(let i=0;i<w.x.length;i++)
+    out+=`${_csvName(w.file)},${w.id},${w.frame[i]},${w.x[i]},${w.y[i]},${w.nx[i].toFixed(4)},${w.ny[i].toFixed(4)}\n`; });
+  return out;
+}
+function wormCSV(w){
+  let out="SourceFile,WormID,Frame,PositionX,PositionY,nx,ny\n";
+  for(let i=0;i<w.x.length;i++)
+    out+=`${_csvName(w.file)},${w.id},${w.frame[i]},${w.x[i]},${w.y[i]},${w.nx[i].toFixed(4)},${w.ny[i].toFixed(4)}\n`;
+  return out;
+}
+function wormStats(w){
+  let len=0; for(let i=1;i<w.x.length;i++) len+=Math.hypot(w.x[i]-w.x[i-1],w.y[i]-w.y[i-1]);
+  const disp=Math.hypot(w.x[w.x.length-1]-w.x[0], w.y[w.y.length-1]-w.y[0]);
+  return {len, disp, n:w.x.length};
+}
+
+// ---- handlers: single (current view) ----
+$("#dlPng").addEventListener("click", ()=>{
+  downloadBlob(dataURLtoBlob(viewPNG(VIEW,3,activeWorms()).png), `${DATA.base}_${VIEW}.png`);
+});
+$("#dlSvg").addEventListener("click", ()=>{
+  downloadText(viewSVG(VIEW, activeWorms()), `${DATA.base}_${VIEW}.svg`, "image/svg+xml");
+});
+$("#dlCsv").addEventListener("click", ()=> downloadText(normalizedCSV(), `${DATA.base}_normalized.csv`, "text/csv"));
+
+// ---- handlers: all graphs as SVG (zip) ----
+$("#dlAllSvg").addEventListener("click", async ()=>{
+  if(typeof JSZip==="undefined") return alert("ZIP library failed to load (needs internet on first open).");
+  const zip=new JSZip();
+  for(const [v,name] of VIEW_FILES) zip.file(`${DATA.base}_${name}.svg`, viewSVG(v, DATA.worms));
+  downloadBlob(await zip.generateAsync({type:"blob"}), `${DATA.base}_graphs_svg.zip`);
+});
+
+// ---- handlers: everything (zip) ----
+$("#dlZip").addEventListener("click", async (e)=>{
+  if(typeof JSZip==="undefined") return alert("ZIP library failed to load (needs internet on first open).");
+  const btn=e.currentTarget; busy(btn,true,"Zipping…");
+  try{
+    const zip=new JSZip();
+    const svgF=zip.folder("graphs_svg"), pngF=zip.folder("graphs_png"), csvF=zip.folder("worm_csv");
+    for(const [v,name] of VIEW_FILES){
+      svgF.file(`${DATA.base}_${name}.svg`, viewSVG(v, DATA.worms));
+      pngF.file(`${DATA.base}_${name}.png`, dataURLtoBlob(viewPNG(v,3,DATA.worms).png));
+    }
+    zip.file(`${DATA.base}_normalized.csv`, normalizedCSV());
+    DATA.worms.forEach(w=> csvF.file(`${w.file}_worm${w.id}.csv`, wormCSV(w)));
+    downloadBlob(await zip.generateAsync({type:"blob"}), `${DATA.base}_export.zip`);
+  } finally{ busy(btn,false); }
+});
+
+// ---- handlers: PDF report ----
+$("#dlPdf").addEventListener("click", async (e)=>{
+  if(!window.jspdf) return alert("PDF library failed to load (needs internet on first open).");
+  const btn=e.currentTarget; busy(btn,true,"Generating…");
+  try{ await new Promise(r=>setTimeout(r,30)); buildPDF(); }
+  catch(err){ console.error(err); alert("PDF error: "+err.message); }
+  finally{ busy(btn,false); }
+});
+
+function buildPDF(){
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:"portrait", unit:"pt", format:"a4"});
+  const PW=pdf.internal.pageSize.getWidth(), PH=pdf.internal.pageSize.getHeight(), M=40;
+
+  const fit=(img,x,y,maxW,maxH)=>{ const r=Math.min(maxW/img.w,maxH/img.h);
+    pdf.addImage(img.png,"PNG", x+(maxW-img.w*r)/2, y, img.w*r, img.h*r); };
+
+  const multi=FILES.length>1;
+  // title page
+  pdf.setFont("helvetica","bold"); pdf.setFontSize(24); pdf.setTextColor(30,30,40);
+  pdf.text("Worm Track Report", M, 90);
+  pdf.setDrawColor(99,102,241); pdf.setLineWidth(2); pdf.line(M,104,M+170,104);
+  pdf.setFont("helvetica","normal"); pdf.setFontSize(12); pdf.setTextColor(90,90,100);
+  let yy=140;
+  pdf.text(`Files: ${FILES.length}`, M, yy); yy+=20;
+  pdf.text(`Worms (total): ${DATA.worms.length}`, M, yy); yy+=20;
+  pdf.text(`Total points: ${DATA.totalPts.toLocaleString()}`, M, yy); yy+=20;
+  pdf.text(`Generated: ${new Date().toLocaleString()}`, M, yy); yy+=28;
+  pdf.setFont("helvetica","bold"); pdf.setFontSize(11); pdf.setTextColor(60,60,70);
+  pdf.text("Source files", M, yy); yy+=16;
+  pdf.setFont("helvetica","normal"); pdf.setFontSize(10); pdf.setTextColor(90,90,100);
+  FILES.forEach((f,i)=>{ if(yy>PH-60){pdf.addPage();yy=60;}
+    pdf.text(`${i+1}. ${f.base}.csv  —  ${f.worms.length} worms, ${f.totalPts.toLocaleString()} points`, M+8, yy); yy+=15; });
+  yy+=8; pdf.setFontSize(9); pdf.setTextColor(140,140,150);
+  pdf.text("Coordinates use image convention (origin top-left, Y increases downward).", M, yy);
+
+  // overview pages — one graph per page (compiled across all files)
+  const ovLabels = multi
+    ? [["rawOverlay","Raw overlay — all files"],["normOverlay","Normalized overlay — all files"],
+       ["rawGrid","Raw — one panel per file"],["normGrid","Normalized — one panel per file"]]
+    : [["rawOverlay","Raw overlay — all worms"],["normOverlay","Normalized overlay — all worms"],
+       ["rawGrid","Raw per-worm grid"],["normGrid","Normalized per-worm grid"]];
+  for(const [v,label] of ovLabels){
+    pdf.addPage();
+    pdf.setFont("helvetica","bold"); pdf.setFontSize(14); pdf.setTextColor(30,30,40);
+    pdf.text(label, M, 50);
+    fit(viewPNG(v, 3, DATA.worms), M, 64, PW-2*M, PH-110);
+  }
+
+  // per-worm pages (grouped by file)
+  for(const w of DATA.worms){
+    pdf.addPage();
+    pdf.setFont("helvetica","bold"); pdf.setFontSize(14); pdf.setTextColor(30,30,40);
+    pdf.text(multi ? `${w.file} — Worm ${w.id}` : `Worm ${w.id}`, M, 50);
+    fit(wormPNG(w,2), M, 64, PW-2*M, PH-150);
+    const s=wormStats(w);
+    pdf.setFont("helvetica","normal"); pdf.setFontSize(11); pdf.setTextColor(80,80,90);
+    const y=PH-70;
+    pdf.text(`Points: ${s.n}`, M, y);
+    pdf.text(`Total path length: ${s.len.toFixed(1)} px`, M, y+18);
+    pdf.text(`Net displacement (start→end): ${s.disp.toFixed(1)} px`, M, y+36);
+  }
+  pdf.save(`${DATA.base}_report.pdf`);
+}
+
+// ---- utils ----
+function dataURLtoBlob(durl){
+  const [head,b64]=durl.split(","); const mime=head.match(/:(.*?);/)[1];
+  const bin=atob(b64), arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+function busy(btn,on,txt){
+  if(on){ btn.dataset.label=btn.textContent; btn.textContent=txt||"Working…"; btn.disabled=true; }
+  else{ btn.textContent=btn.dataset.label||btn.textContent; btn.disabled=false; }
+}
+</script>
+</body>
+</html>
